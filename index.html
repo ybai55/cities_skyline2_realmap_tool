@@ -1,0 +1,201 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no, width=device-width">
+    <link rel="stylesheet" href="https://a.amap.com/jsapi_demos/static/demo-center/css/demo-center.css" />
+    <title>Cities Skyline II real map blueprint</title>
+    <style>
+        html,
+        body,
+        #container {
+          width: 100%;
+          height: 100%;
+        }
+    </style>
+</head>
+<body>
+<div id="container"></div>
+<div class="input-card" style="width: 120px">
+    <button class="btn" onclick="start_drawing()" style="margin-bottom: 5px">开始绘图</button> 
+    <button class="btn" onclick="end_drawing()">结束绘图</button> 
+    <label id="partx"></label>
+    <label id="party"></label>
+    <label id="start_point"></label>
+    <label id="end_point"></label>
+    <label id="info"></label>
+ </div>
+<!-- 加载地图JSAPI脚本 -->
+<script src="https://webapi.amap.com/maps?v=2.0&key="></script>
+<script src="./tools.js"></script>
+<script>
+    var bl_lat, bl_lng;
+    var tr_lat, tr_lng;
+    var is_start_drawing;
+    
+    var rectangles = new Array();
+    // 创建一个 Icon
+    var startIcon = new AMap.Icon({
+        // 图标尺寸
+        size: new AMap.Size(25, 34),
+        // 图标的取图地址
+        image: './dir-marker.png',
+        // 图标所用图片大小
+        imageSize: new AMap.Size(135, 40),
+        // 图标取图偏移量
+        imageOffset: new AMap.Pixel(-9, -3)
+    });
+    // 创建一个 icon
+    var endIcon = new AMap.Icon({
+        size: new AMap.Size(25, 34),
+        image: './dir-marker.png',
+        imageSize: new AMap.Size(135, 40),
+        imageOffset: new AMap.Pixel(-95, -3)
+    });
+
+    var startMarker = new AMap.Marker({
+        position: new AMap.LngLat(113.571209,23.139891),
+        icon: startIcon,
+        offset: new AMap.Pixel(-13, -30),
+        draggable: true});
+    var endMarker = new AMap.Marker({
+        position: new AMap.LngLat(113.952788,22.786247),
+        icon: startIcon,
+        offset: new AMap.Pixel(-13, -30),
+        draggable: true});;
+
+    var map = new AMap.Map('container', {
+        viewMode: '2D', // 默认使用 2D 模式，如果希望使用带有俯仰角的 3D 模式，请设置 viewMode: '3D'
+        zoom:12.8, // 初始化地图层级
+        left: [113.574411,23.127427] // 初始化地图中心点
+    });
+
+    map.on('click', function(e){
+        // 点击获取经纬度
+        if (is_start_drawing == true && bl_lat == null) {
+            bl_lng = e.lnglat.getLng()
+            bl_lat = e.lnglat.getLat()
+            document.getElementById("start_point").innerText = bl_lng +',' + bl_lat
+            // console.log('top left : ' + bl_lng, bl_lat)
+            if (startMarker != null){
+                startMarker.setMap(null)
+            }
+            // 将 icon 传入 marker
+            startMarker = new AMap.Marker({
+                position: new AMap.LngLat(bl_lng,bl_lat),
+                icon: startIcon,
+                offset: new AMap.Pixel(-13, -30),
+                draggable: true
+            });
+             // 将 markers 添加到地图
+            map.add(startMarker);
+        }
+        else if (is_start_drawing == true && bl_lat != null){
+            tr_lng = e.lnglat.getLng()
+            tr_lat = e.lnglat.getLat()
+            document.getElementById("end_point").innerText = tr_lng +',' + tr_lat
+            // console.log('bottom right : ' + tr_lng, tr_lat)
+            if (endMarker != null){
+                endMarker.setMap(null)
+            }
+            // 将 icon 传入 marker
+            endMarker = new AMap.Marker({
+                position: new AMap.LngLat(tr_lng,tr_lat),
+                icon: endIcon,
+                offset: new AMap.Pixel(-13, -30)
+            });
+            map.add(endMarker);
+            // 绘制地图
+            drawing_recttangle(bl_lng, bl_lat, tr_lng, tr_lat)
+        }
+    })
+
+    
+    function showInfo(e){
+        console.log('start')
+        console.log(startMarker.getLng())
+        console.log(startMarker.getLat())
+        document.getElementById('info').innerText = startMarker.getLng()
+    }
+
+    function start_drawing(){
+        is_start_drawing = true;
+        startMarker.on('dragging', showInfo);
+    }
+
+    function end_drawing(){
+        is_start_drawing = false;
+        bl_lat = null;
+        startMarker.off('dragging', showInfo);
+
+        // 绘制地图
+    }
+        
+    function drawing_recttangle(bl_lng, bl_lat, tr_lng, tr_lat) {
+        if (rectangles.length > 0){
+            map.remove(rectangles)
+            rectangles = []
+        }
+        // 分度多少段
+        //TODO: 后边要把分多少段, 按照米来计算
+        // 1920m 一个格, 8m一个小格, 一个1920*1920有240*240个小格. 
+        // 先做大格子. 
+
+        // 计算有多少个1920m. 
+        // 需要3个点
+        var large_inverval = 1920
+        var sw_p = new AMap.LngLat(bl_lng, bl_lat)
+        var se_p = new AMap.LngLat(tr_lng, bl_lat)
+        var nw_p = new AMap.LngLat(bl_lng, tr_lat)
+
+        y_distance = compute_dis(sw_p, nw_p)
+        x_distance = compute_dis(sw_p, se_p)
+
+        var part_x = x_distance / large_inverval, part_y = y_distance / large_inverval;
+        document.getElementById("partx").innerText = "x轴块数:" + Math.ceil(part_x)
+        document.getElementById("party").innerText = "y轴块数:" +Math.ceil(part_y)
+
+        // var part_x = 21, part_y = 21;
+        // console.log(part_y, part_x)
+
+        var diff_x = bl_lng - tr_lng;
+        var diff_y = bl_lat - tr_lat;
+
+        var interval_x = diff_x / part_x
+        var interval_y = diff_y / part_y
+
+        var num = 0;
+
+        for (var i = 0; i < part_x; i ++) {
+            for (var j = 0; j < part_y; j++) {
+                var arr = new Array();
+                south_west = new AMap.LngLat(bl_lng - interval_x * i, bl_lat - interval_y * j)
+                north_east = new AMap.LngLat(bl_lng - interval_x * (i+1), bl_lat - interval_y * (j+1))
+                var bounds = new AMap.Bounds(south_west, north_east)
+                var rectangle = new AMap.Rectangle({
+                    id: "rectangle"+num,
+                    bounds: bounds,
+                    strokeColor:'#0000ff',
+                    strokeWeight: 3,
+                    strokeOpacity:0.2,
+                    strokeDasharray: [30,10],
+                    // strokeStyle还支持 solid
+                    strokeStyle: 'dashed',
+                    fillColor:'#f5deb3',
+                    fillOpacity:0.35,
+                    cursor:'pointer',
+                    zIndex:50,
+                })
+                rectangles.push(rectangle)
+            }
+        }
+        map.add(rectangles)
+    }
+
+
+
+
+</script>
+</body>
+</html>
